@@ -1,0 +1,11 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\src",
+    "\\src\\ApiRequest.Core",
+    "\\src\\ApiRequest.Core\\Services",
+    "\\src\\ApiRequest.Infrastructure"
+  ],
+  "SelectedNode": "\\src\\ApiRequest.Core\\Services\\TokenService.cs",
+  "PreviewInSolutionExplorer": false
+}

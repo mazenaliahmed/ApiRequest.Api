@@ -1,7 +1,7 @@
 using ApiRequest.Core.DTOs;
+using ApiRequest.Core.Entities;
 using ApiRequest.Core.Interfaces;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace ApiRequest.Api.Controllers
 {
@@ -41,7 +41,7 @@ namespace ApiRequest.Api.Controllers
         public async Task<ActionResult<IEnumerable<ServiceProviderListItemDto>>> GetServiceProviders()
         {
             var serviceProviders = await _unitOfWork.Users.FindAsync(u => u.AccountType == "مقدم خدمة");
-            
+
             var serviceProviderDtos = serviceProviders.Select(sp => new ServiceProviderListItemDto
             {
                 Id = sp.Id,
@@ -97,7 +97,7 @@ namespace ApiRequest.Api.Controllers
         public async Task<ActionResult<IEnumerable<DocumentDto>>> GetRequestDocuments(long requestId)
         {
             var documents = await _unitOfWork.RequestDocuments.FindAsync(d => d.RequestId == requestId);
-            
+
             var documentDtos = documents.Select(d => new DocumentDto
             {
                 Id = d.Id,
@@ -110,4 +110,75 @@ namespace ApiRequest.Api.Controllers
             return Ok(documentDtos);
         }
     }
+
+
+
+    [Route("api/[controller]")]
+    [ApiController]
+    public class RequestAssignmentsController : ControllerBase
+    {
+        private readonly IUnitOfWork _unitOfWork;
+        private readonly ILogger<RequestAssignmentsController> _logger;
+
+        public RequestAssignmentsController(IUnitOfWork unitOfWork, ILogger<RequestAssignmentsController> logger)
+        {
+            _unitOfWork = unitOfWork;
+            _logger = logger;
+        }
+
+        [HttpPost("create-assignment")]
+        public async Task<IActionResult> CreateAssignment([FromBody] CreateRequestAssignmentDto dto)
+        {
+            _logger.LogInformation("Starting CreateAssignment for RequestID: {RequestID} and ServiceProviderID: {ServiceProviderID}",
+                dto.RequestID, dto.ServiceProviderID);
+
+            try
+            {
+                // Optionally, validate that the referenced Request exists:
+                // var request = await _unitOfWork.Requests.GetByIdAsync(dto.RequestID);
+                // if (request == null) return BadRequest("Invalid RequestID.");
+
+                var assignment = new RequestAssignment
+                {
+                    RequestId = dto.RequestID,
+                    ServiceProviderId = dto.ServiceProviderID,
+                    // If no status is provided, use the default value
+                    //ExecutionStatus = string.IsNullOrEmpty(dto.ExecutionStatus) ? "PaymentPending" : dto.ExecutionStatus,
+                    ExecutionStatus = "PaymentPending",
+                    Note = dto.Note,
+                    Amount = dto.Amount,
+                    // EntryTime will use either the default value from the database or this value.
+
+                };
+
+                await _unitOfWork.RequestAssignments.AddAsync(assignment);
+                await _unitOfWork.SaveChangesAsync();
+
+                // Return a standard response object (adjust StandardApiResponse to your implementation)
+                var response = new StandardApiResponse<object>
+                {
+                    Success = true,
+                    Message = "Request assignment created successfully.",
+                    Data = assignment, // You can shape the returned data as needed.
+                    Errors = null
+                };
+
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while creating request assignment");
+                var errorResponse = new StandardApiResponse<object>
+                {
+                    Success = false,
+                    Message = "An error occurred while processing your request.",
+                    Data = null,
+                    Errors = ex.Message
+                };
+
+                return StatusCode(500, errorResponse);
+            }
+        }
+    }
+
 }

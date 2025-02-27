@@ -275,6 +275,88 @@ namespace ApiRequest.Api.Controllers
         }
 
 
+        [HttpPost("forgot-password")]
+        public async Task<ActionResult> ForgotPassword([FromForm] ForgotPasswordDto forgotPasswordDto)
+        {
+            _logger.LogInformation("ForgotPassword method started for user: {UserName}", forgotPasswordDto.UserName);
+
+            try
+            {
+                // Find the user by username
+                var user = (await _unitOfWork.Users.FindAsync(u => u.UserName == forgotPasswordDto.UserName)).FirstOrDefault();
+                if (user == null)
+                {
+                    _logger.LogWarning("User not found: {UserName}", forgotPasswordDto.UserName);
+                    return BadRequest("User not found");
+                }
+
+                // Generate a random 6-digit OTP
+                var otp = new Random().Next(100000, 999999);
+                user.Otp = otp;
+                user.OtpGeneratedAt = DateTime.UtcNow;
+
+                // Save the OTP to the database
+                await _unitOfWork.SaveChangesAsync();
+
+                // Send the OTP to the user's phone number via WhatsApp (or your chosen channel)
+                await _whatsAppService.SendOtpAsync(user.PhoneNumber, otp.ToString());
+
+                _logger.LogInformation("OTP sent to WhatsApp for phone number: {PhoneNumber} for user: {UserName}", user.PhoneNumber, user.UserName);
+
+                return Ok(new { Message = "OTP has been sent to your registered number.", UserId = user.Id });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An error occurred in ForgotPassword for user: {UserName}", forgotPasswordDto.UserName);
+                return StatusCode(500, "An error occurred while processing your request. Please try again later.");
+            }
+        }
+
+        [HttpPost("reset-password")]
+        public async Task<ActionResult> ResetPassword([FromForm] ResetPasswordDto resetPasswordDto)
+        {
+            _logger.LogInformation("ResetPassword method started for user: {UserName}", resetPasswordDto.UserName);
+
+            try
+            {
+                // Retrieve the user based on the username
+                var user = (await _unitOfWork.Users.FindAsync(u => u.UserName == resetPasswordDto.UserName)).FirstOrDefault();
+                if (user == null)
+                {
+                    _logger.LogWarning("User not found: {UserName}", resetPasswordDto.UserName);
+                    return BadRequest("User not found");
+                }
+
+                // Check that the OTP is correct and has not expired (e.g., within 10 minutes)
+                if (user.Otp != resetPasswordDto.Otp || (DateTime.UtcNow - user.OtpGeneratedAt)?.TotalMinutes > 10)
+                {
+                    _logger.LogWarning("Invalid or expired OTP for user: {UserName}", resetPasswordDto.UserName);
+                    return BadRequest("Invalid or expired OTP");
+                }
+
+                // Hash the new password using HMACSHA512 (for production, consider using a more robust password hasher like BCrypt or ASP.NET Identity)
+                using var hmac = new HMACSHA512();
+                user.Password = hmac.ComputeHash(Encoding.UTF8.GetBytes(resetPasswordDto.NewPassword));
+                user.PasswordSalt = hmac.Key;
+
+                // Optionally, clear the OTP and its generation timestamp
+                user.Otp = 0;
+                user.OtpGeneratedAt = null;
+
+                // Save the updated user information to the database
+                await _unitOfWork.SaveChangesAsync();
+
+                _logger.LogInformation("Password reset successfully for user: {UserName}", user.UserName);
+                return Ok("Password reset successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error resetting password for user: {UserName}", resetPasswordDto.UserName);
+                return StatusCode(500, "An error occurred while processing your request. Please try again later.");
+            }
+        }
+
+
         [HttpPost("login")]
 
         public async Task<ActionResult<UserDto>> Login(LoginDto loginDto)

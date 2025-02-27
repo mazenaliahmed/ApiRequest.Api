@@ -15,8 +15,8 @@ namespace ApiRequest.Core.Entities
         public string Address { get; set; }
         public string TradeLicenseImage { get; set; }
         public DateTime EntryTime { get; set; }
-        public DateTime OtpGeneratedAt { get; set; }
-        public int Otp { get; set; }
+        public DateTime? OtpGeneratedAt { get; set; }
+        public int? Otp { get; set; }
         public string Status { get; set; } = "Pending"; // Pending, Approved, Rejected
 
 
